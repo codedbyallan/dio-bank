@@ -20,7 +20,7 @@ public class InvestmentWallet extends Wallet {
         super(INVESTMENT);
         this.investment = investment;
         this.account = account;
-        addFunds(account.reduceMoney(amount), getService(), "Investimento inicial");
+        addMoney(account.reduceMoney(amount), getService(), "Investimento inicial");
     }
 
     public void updateAmount(final long percent) {
