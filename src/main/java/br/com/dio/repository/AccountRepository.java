@@ -4,6 +4,7 @@ import br.com.dio.exception.AccountNotFoundException;
 import br.com.dio.exception.PixInUseException;
 import br.com.dio.model.AccountWallet;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static br.com.dio.repository.CommonsRepository.checkFundsForTransaction;
@@ -11,6 +12,10 @@ import static br.com.dio.repository.CommonsRepository.checkFundsForTransaction;
 public class AccountRepository {
 
     private List<AccountWallet> accounts;
+
+    public AccountRepository(){
+        this.accounts = new ArrayList<>();
+    }
 
     public AccountWallet create(final List<String> pix, final long initialAmount) {
 
