@@ -1,8 +1,13 @@
 package br.com.dio;
 
+import br.com.dio.exception.AccountNotFoundException;
+import br.com.dio.exception.NoFundsEnoughException;
+import br.com.dio.exception.PixInUseException;
 import br.com.dio.repository.AccountRepository;
 import br.com.dio.repository.InvestmentRepository;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -22,16 +27,8 @@ public class Main {
             System.out.println("2) Investments");
             System.out.println("3) Search");
             System.out.println("0) Exit\n");
-            System.out.print("Option: ");
 
-            if (!sc.hasNextInt()) {
-                System.out.println("Invalid input. Please enter a number.");
-                sc.next();
-                continue;
-            }
-
-            option = sc.nextInt();
-            sc.nextLine();
+            option = readInt(sc, "Option: ");
 
             switch (option) {
                 case 1 -> {
@@ -45,23 +42,16 @@ public class Main {
                         System.out.println("[4] Transfer");
                         System.out.println("[5] List All Accounts");
                         System.out.println("[0] Back to Main Menu");
-                        System.out.print("Option: ");
 
-                        if (!sc.hasNextInt()) {
-                            System.out.println("Invalid input. Please enter a number.");
-                            sc.next();
-                            continue;
-                        }
+                        accountOption = readInt(sc, "Option: ");
 
-                        accountOption = sc.nextInt();
-                        sc.nextLine();
 
                         switch (accountOption) {
-                            case 1 -> System.out.println("Creating account... (placeholder)");
-                            case 2 -> System.out.println("Depositing... (placeholder)");
-                            case 3 -> System.out.println("Withdrawing... (placeholder)");
-                            case 4 -> System.out.println("Transferring... (placeholder)");
-                            case 5 -> System.out.println("Listing all accounts... (placeholder)");
+                            case 1 -> handleCreateAccount(sc, accountRepository);
+                            case 2 -> handleDeposit(sc, accountRepository);
+                            case 3 -> handleWithdraw(sc, accountRepository);
+                            case 4 -> handleTransfer(sc, accountRepository);
+                            case 5 -> handleListAccounts(accountRepository);
                             case 0 -> System.out.println("Returning to main menu...");
                             default -> System.out.println("Invalid option. Please try again.");
                         }
@@ -81,15 +71,8 @@ public class Main {
                         System.out.println("[6] List Investment Products");
                         System.out.println("[7] List Investment Wallets");
                         System.out.println("[0] Back to Main Menu");
-                        System.out.print("Option: ");
-                        if (!sc.hasNextInt()) {
-                            System.out.println("Invalid input. Please enter a number.");
-                            sc.next();
-                            continue;
-                        }
 
-                        investmentOption = sc.nextInt();
-                        sc.nextLine();
+                        investmentOption = readInt(sc, "Option: ");
 
                         switch (investmentOption) {
                             case 1 -> System.out.println("Creating investment product... (placeholder)");
@@ -114,16 +97,8 @@ public class Main {
                         System.out.println("[2] Find Investment Wallet by PIX");
                         System.out.println("[3] View Account Transactions");
                         System.out.println("[0] Back to Main Menu");
-                        System.out.print("Option: ");
 
-                        if (!sc.hasNextInt()) {
-                            System.out.println("Invalid input. Please enter a number.");
-                            sc.next();
-                            continue;
-                        }
-
-                        searchOption = sc.nextInt();
-                        sc.nextLine();
+                        searchOption = readInt(sc, "Option: ");
 
                         switch (searchOption) {
                             case 1 -> System.out.println("Finding account by PIX... (placeholder)");
@@ -142,4 +117,161 @@ public class Main {
 
         sc.close();
     }
+
+    private static int readInt(Scanner sc, String label) {
+        while (true) {
+            System.out.print(label);
+            if (sc.hasNextInt()) {
+                int value = sc.nextInt();
+                sc.nextLine();
+                return value;
+            }
+            System.out.println("Invalid input. Please enter an integer number.");
+            sc.nextLine();
+        }
+    }
+
+    private static long readLong(Scanner sc, String label) {
+        while (true) {
+            System.out.print(label);
+            if (sc.hasNextLong()) {
+                long value = sc.nextLong();
+                sc.nextLine();
+                return value;
+            }
+            System.out.println("Invalid input. Please enter a numeric value.");
+            sc.nextLine();
+        }
+    }
+
+    private static List<String> readPixList(Scanner sc) {
+        System.out.print("Enter PIX keys separated by commas: ");
+        String input = sc.nextLine();
+        return Arrays.stream(input.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    private static void handleCreateAccount(Scanner sc, AccountRepository repo) {
+        var pixList = readPixList(sc);
+        if (pixList.isEmpty()) {
+            System.out.println("[Error] At least one PIX key is required to create an account.");
+            return;
+        }
+        long initial = readLong(sc, "Enter initial deposit amount: ");
+        if (initial < 0) {
+            System.out.println("[Error] Initial deposit cannot be negative.");
+            return;
+        }
+        try {
+            var acc = repo.create(pixList, initial);
+            System.out.println("Account created successfully!");
+            System.out.println("Pix: " + acc.getPix());
+            System.out.println("Balance: " + acc.getFunds());
+        } catch (PixInUseException e) {
+            System.out.println("[Error] PIX already in use: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] Invalid amount: " + e.getMessage());
+        }
+    }
+
+    private static void handleListAccounts(AccountRepository repo) {
+        var list = repo.list();
+        if (list.isEmpty()) {
+            System.out.println("No accounts found.");
+            return;
+        }
+        System.out.println("=== Accounts ===");
+        for (var acc : list) {
+            System.out.println("Pix: " + acc.getPix() + " | Balance: " + acc.getFunds());
+        }
+    }
+
+    private static String readSinglePix(Scanner sc) {
+        while (true) {
+            System.out.print("Enter PIX key: ");
+            String s = sc.nextLine().trim();
+            if (!s.isEmpty()) return s;
+            System.out.println("[Error] PIX key cannot be empty.");
+        }
+    }
+
+    private static void handleDeposit(Scanner sc, AccountRepository repo) {
+        String pix = readSinglePix(sc);
+        long amount = readLong(sc, "Enter deposit amount: ");
+        if (amount <= 0) {
+            System.out.println("[Error] Amount must be greater than zero.");
+            return;
+        }
+        try {
+            repo.deposit(pix, amount);
+            long newBalance = repo.findByPix(pix).getFunds();
+            System.out.println("Deposit successful!");
+            System.out.println("PIX: " + pix + " | New balance: " + newBalance);
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] Invalid amount: " + e.getMessage());
+        }
+    }
+
+    private static void handleWithdraw(Scanner sc, AccountRepository repo) {
+        String pix = readSinglePix(sc);
+        long amount = readLong(sc, "Enter withdrawal amount: ");
+        if (amount <= 0) {
+            System.out.println("[Error] Amount must be greater than zero.");
+            return;
+        }
+        try {
+            repo.withdraw(pix, amount);
+            long newBalance = repo.findByPix(pix).getFunds();
+            System.out.println("Withdrawal successful!");
+            System.out.println("PIX: " + pix + " | New balance: " + newBalance);
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        } catch (NoFundsEnoughException e) {
+            System.out.println("[Error] Insufficient funds: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] Invalid value: " + e.getMessage());
+        }
+    }
+
+    private static void handleTransfer(Scanner sc, AccountRepository repo) {
+        System.out.println("=== Transfer ===");
+        System.out.println("(Source)");
+        String fromPix = readSinglePix(sc);
+        System.out.println("(Target)");
+        String toPix = readSinglePix(sc);
+        if (fromPix.equals(toPix)) {
+            System.out.println("[Error] Source and target PIX must be different.");
+            return;
+        }
+        long amount = readLong(sc, "Enter transfer amount: ");
+
+        if (amount <= 0) {
+            System.out.println("[Error] Amount must be greater than zero.");
+            return;
+        }
+
+        try {
+            repo.transferMoney(fromPix, toPix, amount);
+            long fromBalance = repo.findByPix(fromPix).getFunds();
+            long toBalance = repo.findByPix(toPix).getFunds();
+            System.out.println("Transfer successful!");
+            System.out.println("From PIX: " + fromPix + " | New balance: " + fromBalance);
+            System.out.println("To PIX: " + toPix + " | New balance: " + toBalance);
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        } catch (NoFundsEnoughException e) {
+            System.out.println("[Error] Insufficient funds: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] Invalid amount: " + e.getMessage());
+        }
+    }
+
+
+
 }
+
+
