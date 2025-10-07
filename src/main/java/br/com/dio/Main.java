@@ -1,8 +1,6 @@
 package br.com.dio;
 
-import br.com.dio.exception.AccountNotFoundException;
-import br.com.dio.exception.NoFundsEnoughException;
-import br.com.dio.exception.PixInUseException;
+import br.com.dio.exception.*;
 import br.com.dio.repository.AccountRepository;
 import br.com.dio.repository.InvestmentRepository;
 
@@ -75,13 +73,13 @@ public class Main {
                         investmentOption = readInt(sc, "Option: ");
 
                         switch (investmentOption) {
-                            case 1 -> System.out.println("Creating investment product... (placeholder)");
-                            case 2 -> System.out.println("Opening investment wallet... (placeholder)");
-                            case 3 -> System.out.println("Depositing to investment... (placeholder)");
-                            case 4 -> System.out.println("Withdrawing from investment... (placeholder)");
-                            case 5 -> System.out.println("Applying earnings update... (placeholder)");
-                            case 6 -> System.out.println("Listing investment products... (placeholder)");
-                            case 7 -> System.out.println("Listing investment wallets... (placeholder)");
+                            case 1 -> handleCreateInvestmentProduct(sc, investmentRepository);
+                            case 2 -> handleOpenInvestmentWallet(sc, accountRepository, investmentRepository);
+                            case 3 -> handleDepositToInvestment(sc, investmentRepository);
+                            case 4 -> handleWithdrawFromInvestment(sc, investmentRepository);
+                            case 5 -> handleApplyEarningsUpdate(investmentRepository);
+                            case 6 -> handleListInvestmentProducts(investmentRepository);
+                            case 7 -> handleListInvestmentWallets(investmentRepository);
                             case 0 -> System.out.println("Returning to main menu...");
                             default -> System.out.println("Invalid option. Please try again.");
                         }
@@ -101,9 +99,9 @@ public class Main {
                         searchOption = readInt(sc, "Option: ");
 
                         switch (searchOption) {
-                            case 1 -> System.out.println("Finding account by PIX... (placeholder)");
-                            case 2 -> System.out.println("Finding investment wallet by PIX... (placeholder)");
-                            case 3 -> System.out.println("Viewing account transactions... (placeholder)");
+                            case 1 -> handleFindAccountByPix(sc, accountRepository);
+                            case 2 -> handleFindInvestmentWalletByPix(sc, investmentRepository);
+                            case 3 -> handleViewAccountTransactions(sc, accountRepository);
                             case 0 -> System.out.println("Returning to main menu...");
                             default -> System.out.println("Invalid option. Please try again.");
                         }
@@ -117,6 +115,8 @@ public class Main {
 
         sc.close();
     }
+
+    //Helpers for reading input and handling operations
 
     private static int readInt(Scanner sc, String label) {
         while (true) {
@@ -152,6 +152,8 @@ public class Main {
                 .filter(s -> !s.isEmpty())
                 .toList();
     }
+
+    //Handlers for account operations
 
     private static void handleCreateAccount(Scanner sc, AccountRepository repo) {
         var pixList = readPixList(sc);
@@ -269,6 +271,224 @@ public class Main {
             System.out.println("[Error] Invalid amount: " + e.getMessage());
         }
     }
+
+    //Handlers for investment operations
+
+    private static void handleCreateInvestmentProduct(Scanner sc, InvestmentRepository repo) {
+        System.out.println("=== Create Investment Product ===");
+
+        long tax = readLong(sc, "Enter tax (% as integer, e.g. 5): ");
+        long initialFunds = readLong(sc, "Enter required initial funds (units): ");
+
+        try {
+            var inv = repo.create(tax, initialFunds);
+            System.out.println("[OK] Investment product created!");
+            System.out.println("ID: " + inv.id()
+                    + " | Tax: " + inv.tax() + "%"
+                    + " | InitialFunds: " + inv.initialFunds());
+        } catch (InvalidInvestmentException e) {
+            System.out.println("[Error] " + e.getMessage());
+        }
+    }
+
+    private static void handleListInvestmentProducts(InvestmentRepository repo) {
+        var list = repo.list();
+        if (list.isEmpty()) {
+            System.out.println("(No investment products yet)");
+            return;
+        }
+        System.out.println("\n=== INVESTMENT PRODUCTS ===");
+        for (var inv : list) {
+            System.out.println("ID: " + inv.id()
+                    + " | Tax: " + inv.tax() + "%"
+                    + " | InitialFunds: " + inv.initialFunds());
+        }
+    }
+
+    private static void handleOpenInvestmentWallet(Scanner sc,
+                                                   AccountRepository accountRepo,
+                                                   InvestmentRepository investRepo) {
+        System.out.println("=== Open Investment Wallet ===");
+
+        String pix = readSinglePix(sc);
+        long id = readLong(sc, "Enter investment product ID: ");
+        if (id <= 0) {
+            System.out.println("[Error] ID must be greater than zero.");
+            return;
+        }
+
+        try {
+            var account = accountRepo.findByPix(pix);
+            var wallet = investRepo.newInvestment(account, id);
+
+            System.out.println("[OK] Investment wallet opened!");
+            System.out.println("Account PIX: " + pix);
+            System.out.println("Product ID: " + wallet.getInvestment().id() + " | Tax: "
+                    + wallet.getInvestment().tax() + "%");
+            System.out.println("Wallet funds (units): " + wallet.getFunds());
+            System.out.println("Account funds after opening (units): " + wallet.getAccount().getFunds());
+
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        } catch (InvestmentNotFoundException e) {
+            System.out.println("[Error] Investment product not found: " + e.getMessage());
+        } catch (AccountWithInvestmentException e) {
+            System.out.println("[Error] This account already has an investment wallet.");
+        } catch (NoFundsEnoughException e) {
+            System.out.println("[Error] Insufficient funds in account for initial investment.");
+        }
+    }
+
+    private static void handleDepositToInvestment(Scanner sc, InvestmentRepository investRepo) {
+        System.out.println("=== Deposit to Investment ===");
+        String pix = readSinglePix(sc);
+        long amount = readLong(sc, "Enter deposit amount (units): ");
+        if (amount <= 0) {
+            System.out.println("[Error] Amount must be greater than zero.");
+            return;
+        }
+        try {
+            var wallet = investRepo.deposit(pix, amount);
+
+            System.out.println("[OK] Deposit to investment done!");
+            System.out.println("Account PIX: " + pix);
+            System.out.println("Investment funds (units): " + wallet.getFunds());
+            System.out.println("Account funds after deposit (units): " + wallet.getAccount().getFunds());
+        } catch (WalletNotFoundException e) {
+            System.out.println("[Error] Investment wallet not found for this PIX.");
+        } catch (NoFundsEnoughException e) {
+            System.out.println("[Error] Insufficient account funds for this deposit.");
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] " + e.getMessage());
+        }
+    }
+
+    private static void handleWithdrawFromInvestment(Scanner sc, InvestmentRepository investRepo) {
+        System.out.println("=== Withdraw from Investment ===");
+        String pix = readSinglePix(sc);
+        long amount = readLong(sc, "Enter withdrawal amount (units): ");
+        if (amount <= 0) {
+            System.out.println("[Error] Amount must be greater than zero.");
+            return;
+        }
+        try {
+            var wallet = investRepo.withdraw(pix, amount);
+
+            boolean closed = (wallet.getFunds() == 0);
+
+            System.out.println("[OK] Withdraw from investment done!");
+            System.out.println("Account PIX: " + pix);
+            System.out.println("Account funds after withdraw (units): " + wallet.getAccount().getFunds());
+            if (closed) {
+                System.out.println("Investment wallet balance is 0 and was closed.");
+            } else {
+                System.out.println("Investment funds (units): " + wallet.getFunds());
+            }
+        } catch (WalletNotFoundException e) {
+            System.out.println("[Error] Investment wallet not found for this PIX.");
+        } catch (NoFundsEnoughException e) {
+            System.out.println("[Error] Insufficient investment funds for this withdrawal.");
+        } catch (IllegalArgumentException e) {
+            System.out.println("[Error] " + e.getMessage());
+        }
+    }
+
+    private static void handleApplyEarningsUpdate(InvestmentRepository repo) {
+        var wallets = repo.listWallets();
+        if (wallets.isEmpty()) {
+            System.out.println("(No investment wallets to update)");
+            return;
+        }
+        repo.updateAmount();
+
+        System.out.println("[OK] Earnings applied to all wallets.");
+        System.out.println("=== Wallets after update ===");
+        for (var w : wallets) {
+            System.out.println("PIX: " + w.getAccount().getPix()
+                    + " | Product ID: " + w.getInvestment().id()
+                    + " | Tax: " + w.getInvestment().tax() + "%"
+                    + " | Funds (units): " + w.getFunds());
+        }
+    }
+
+    private static void handleListInvestmentWallets(InvestmentRepository repo) {
+        var wallets = repo.listWallets();
+        if (wallets.isEmpty()) {
+            System.out.println("(No investment wallets)");
+            return;
+        }
+
+        System.out.println("\n=== INVESTMENT WALLETS ===");
+        for (var w : wallets) {
+            System.out.println("PIX: " + w.getAccount().getPix()
+                    + " | Product ID: " + w.getInvestment().id()
+                    + " | Tax: " + w.getInvestment().tax() + "%"
+                    + " | Funds (units): " + w.getFunds());
+        }
+    }
+
+    //Handlers for search operations
+
+    private static void handleFindAccountByPix(Scanner sc, AccountRepository accountRepo) {
+        System.out.println("=== Find Account by PIX ===");
+        String pix = readSinglePix(sc);
+        try {
+            var acc = accountRepo.findByPix(pix);
+            System.out.println("[OK] Account found!");
+            System.out.println("PIX list: " + acc.getPix());
+            System.out.println("Balance (units): " + acc.getFunds());
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        }
+    }
+
+    private static void handleFindInvestmentWalletByPix(Scanner sc, InvestmentRepository investRepo) {
+        System.out.println("=== Find Investment Wallet by PIX ===");
+        String pix = readSinglePix(sc);
+        try {
+            var w = investRepo.findWalletByAccountPix(pix);
+            System.out.println("[OK] Investment wallet found!");
+            System.out.println("Account PIX list: " + w.getAccount().getPix());
+            System.out.println("Product ID: " + w.getInvestment().id()
+                    + " | Tax: " + w.getInvestment().tax() + "%");
+            System.out.println("Wallet funds (units): " + w.getFunds());
+        } catch (WalletNotFoundException e) {
+            System.out.println("[Error] Investment wallet not found: " + e.getMessage());
+        }
+    }
+
+    private static void handleViewAccountTransactions(Scanner sc, AccountRepository accountRepo) {
+        System.out.println("=== View Account Transactions ===");
+        String pix = readSinglePix(sc);
+        try {
+            var acc = accountRepo.findByPix(pix);
+            var audits = acc.getFinancialTransactions();
+
+            if (audits.isEmpty()) {
+                System.out.println("(No transactions)");
+                return;
+            }
+
+            var last10 = audits.stream()
+                    .sorted((a, b) -> b.createdAt().compareTo(a.createdAt()))
+                    .limit(10)
+                    .toList();
+
+            System.out.println("Showing last " + last10.size() + " transactions for PIX: " + acc.getPix());
+            System.out.println("----------------------------------------------------------------");
+            for (var a : last10) {
+                System.out.println("ID: " + a.transactionId());
+                System.out.println("Service: " + a.targetService());
+                System.out.println("When: " + a.createdAt());
+                System.out.println("Desc: " + a.description());
+                System.out.println("----------------------------------------------------------------");
+            }
+        } catch (AccountNotFoundException e) {
+            System.out.println("[Error] Account not found: " + e.getMessage());
+        }
+    }
+
+
 
 
 

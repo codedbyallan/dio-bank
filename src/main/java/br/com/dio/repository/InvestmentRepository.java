@@ -1,6 +1,7 @@
 package br.com.dio.repository;
 
 import br.com.dio.exception.AccountWithInvestmentException;
+import br.com.dio.exception.InvalidInvestmentException;
 import br.com.dio.exception.InvestmentNotFoundException;
 import br.com.dio.exception.WalletNotFoundException;
 import br.com.dio.model.AccountWallet;
@@ -19,6 +20,9 @@ public class InvestmentRepository {
     private final List<InvestmentWallet> wallets = new ArrayList<>();
 
     public Investment create(final long tax, final long initialFunds) {
+        if (tax <= 0 || initialFunds <= 0) {
+            throw new InvalidInvestmentException("Tax and initial funds must be greater than zero.");
+        }
         this.nextId++;
         var investment = new Investment(this.nextId, tax, initialFunds);
         this.investments.add(investment);
